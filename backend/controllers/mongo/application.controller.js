@@ -126,7 +126,8 @@ exports.deactivateApplication = async (req, res) => {
 
 // Controller to delete an existing application
 exports.deleteApplication = async (req, res) => {
-  const application = await Application.findByIdAndUpdate(
+  let application = await Application.findById(req.params.id);
+  application = await Application.findByIdAndUpdate(
     req.params.id,
     {
       isActive: false,
@@ -134,7 +135,6 @@ exports.deleteApplication = async (req, res) => {
     },
     { new: true },
   );
-
   if (!application)
     return res
       .status(httpStatus.INTERNAL_SERVER_ERROR)
