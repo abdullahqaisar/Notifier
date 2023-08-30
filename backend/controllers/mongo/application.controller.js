@@ -126,8 +126,7 @@ exports.deactivateApplication = async (req, res) => {
 
 // Controller to delete an existing application
 exports.deleteApplication = async (req, res) => {
-  let application = await Application.findById(req.params.id);
-  application = await Application.findByIdAndUpdate(
+  const application = await Application.findByIdAndUpdate(
     req.params.id,
     {
       isActive: false,

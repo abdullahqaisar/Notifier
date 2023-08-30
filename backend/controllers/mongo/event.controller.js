@@ -28,8 +28,8 @@ exports.getAllEvents = async (req, res) => {
     return res.status(httpStatus.NOT_FOUND).send("No events found.");
 
   const response = {
-    currentPage: page,
-    pageSize,
+    currentPage: parseInt(page, 10),
+    pageSize: parseInt(pageSize, 10),
     totalCount,
     events,
   };
