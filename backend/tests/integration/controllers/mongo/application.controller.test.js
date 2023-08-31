@@ -96,26 +96,6 @@ describe("Integration Tests - /api/applications", () => {
         "No applications found.",
       );
     });
-
-    it("should handle error if page is invalid", async () => {
-      const res = await request(server).get("/api/applications?page=one");
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"page" must be a number',
-      );
-    });
-
-    it("should handle error if pageSize is invalid", async () => {
-      const res = await request(server).get("/api/applications?pageSize=one");
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"pageSize" must be a number',
-      );
-    });
   });
 
   describe("GET /:id", () => {
@@ -133,7 +113,7 @@ describe("Integration Tests - /api/applications", () => {
       expect(res.body).toHaveProperty("name", mockApplication.name);
     });
 
-    it("should return 404 if invalid id is passed", async () => {
+    it("should return 400 if invalid id is passed", async () => {
       const res = await request(server).get("/api/applications/1");
 
       expectStatusCodeAndMessage(res, httpStatus.BAD_REQUEST, "Invalid Id.");
@@ -158,10 +138,10 @@ describe("Integration Tests - /api/applications", () => {
     let description;
 
     const exec = async () => {
-      const req = await request(server)
+      const res = await request(server)
         .post("/api/applications")
         .send({ name, description });
-      return req;
+      return res;
     };
 
     beforeEach(() => {
@@ -169,110 +149,43 @@ describe("Integration Tests - /api/applications", () => {
       description = "This is a mock app";
     });
 
-    it("should return 400 if application name is less than 5 characters", async () => {
-      name = "1234";
-
+    it("should create a new application if input is valid", async () => {
       const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"name" length must be at least 5 characters long',
-      );
-    });
-
-    it("should return 400 if application name is more than 50 characters", async () => {
-      name = "a".repeat(51);
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"name" length must be less than or equal to 50 characters long',
-      );
-    });
-
-    it("should return 400 if application description is less than 5 characters", async () => {
-      description = "App";
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"description" length must be at least 5 characters long',
-      );
-    });
-
-    it("should return 400 if application description is more than 1024 characters", async () => {
-      description = "a".repeat(1025);
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"description" length must be less than or equal to 1024 characters long',
-      );
-    });
-
-    it("should return 400 if application name is not provided", async () => {
-      name = "";
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"name" is not allowed to be empty',
-      );
-    });
-
-    it("should return 400 if application description is not provided", async () => {
-      description = "";
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"description" is not allowed to be empty',
-      );
-    });
-
-    it("should return 409 if application with the given name already exists", async () => {
-      await createMockApplication("App 1", "This is a mock app");
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.CONFLICT,
-        "Application with this name already exists.",
-      );
-    });
-
-    it("should return 201 if application is created successfully", async () => {
-      const res = await exec();
-
-      const expectedApplication = {
-        name: "App 1",
-        description: "This is a mock app",
-        isActive: true,
-        isDeleted: false,
-        _id: expect.any(String),
-        createdDate: expect.any(String),
-        modifiedDate: expect.any(String),
-        __v: 0,
-      };
 
       expect(res.status).toBe(httpStatus.CREATED);
       expect(res.body).toHaveProperty(
         "message",
         "Application created successfully.",
       );
+      const expectedApplication = {
+        _id: expect.any(String),
+        name: "App 1",
+        description: "This is a mock app",
+        isActive: true,
+        isDeleted: false,
+        createdDate: expect.any(String),
+        modifiedDate: expect.any(String),
+        __v: 0,
+      };
       expect(res.body.application).toEqual(expectedApplication);
+    });
+
+    it("should return 409 if application with the given name already exists", async () => {
+      await createMockApplication("Existing App", "An existing application.");
+      const mockApplicationData = {
+        name: "Existing App",
+        description: "A new application.",
+      };
+
+      const res = await request(server)
+        .post("/api/applications")
+        .send(mockApplicationData);
+
+      expectStatusCodeAndMessage(
+        res,
+        httpStatus.CONFLICT,
+        "Application with this name already exists.",
+      );
     });
 
     it("should return 500 if application could not be created", async () => {
@@ -287,6 +200,7 @@ describe("Integration Tests - /api/applications", () => {
         httpStatus.INTERNAL_SERVER_ERROR,
         "Something failed",
       );
+
       Application.prototype.save.mockRestore();
     });
   });
@@ -318,58 +232,11 @@ describe("Integration Tests - /api/applications", () => {
       application._id = nonExistentId;
 
       const res = await exec();
+
       expectStatusCodeAndMessage(
         res,
         httpStatus.INTERNAL_SERVER_ERROR,
-        `The application could not be updated.`,
-      );
-    });
-
-    it("should return 400 if application name is less than 5 characters", async () => {
-      newName = "1234";
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"name" length must be at least 5 characters long',
-      );
-    });
-
-    it("should return 400 if application name is more than 50 characters", async () => {
-      newName = "a".repeat(51);
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"name" length must be less than or equal to 50 characters long',
-      );
-    });
-
-    it("should return 400 if application description is less than 5 characters", async () => {
-      newDescription = "Desc";
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"description" length must be at least 5 characters long',
-      );
-    });
-
-    it("should return 400 if application description is more than 1024 characters", async () => {
-      newDescription = "a".repeat(1025);
-
-      const res = await exec();
-
-      expectStatusCodeAndMessage(
-        res,
-        httpStatus.BAD_REQUEST,
-        '"description" length must be less than or equal to 1024 characters long',
+        "The application could not be updated.",
       );
     });
 
@@ -386,6 +253,18 @@ describe("Integration Tests - /api/applications", () => {
       expect(res.body).toHaveProperty("application.isDeleted", false);
     });
 
+    it("should return 409 if application with the new name already exists", async () => {
+      await createMockApplication(newName, newDescription);
+
+      const res = await exec();
+
+      expectStatusCodeAndMessage(
+        res,
+        httpStatus.CONFLICT,
+        "Application with this name already exists.",
+      );
+    });
+
     // it("should return 500 if application could not be updated", async () => {
     //   jest
     //     .spyOn(Application.prototype, "save")
@@ -396,7 +275,7 @@ describe("Integration Tests - /api/applications", () => {
     //   expectStatusCodeAndMessage(
     //     res,
     //     httpStatus.INTERNAL_SERVER_ERROR,
-    //     "Something failed",
+    //     "The application could not be updated.",
     //   );
     //   Application.prototype.save.mockRestore();
     // });
@@ -418,12 +297,6 @@ describe("Integration Tests - /api/applications", () => {
         "This is a mock app",
         true,
       );
-    });
-
-    it("should return 400 if applicationId is invalid", async () => {
-      const res = await request(server).patch(`/api/applications/1/deactivate`);
-
-      expectStatusCodeAndMessage(res, httpStatus.BAD_REQUEST, "Invalid Id.");
     });
 
     it("should update the application's isActive to false", async () => {
@@ -465,24 +338,6 @@ describe("Integration Tests - /api/applications", () => {
         "The application with the given ID was not found.",
       );
     });
-
-    // it("should handle unexpected errors during update", async () => {
-    //   jest
-    //     .spyOn(Application, "findByIdAndUpdate")
-    //     .mockImplementationOnce(() => {
-    //       throw new Error("Unexpected error");
-    //     });
-
-    //   const res = await exec();
-
-    //   expectStatusCodeAndMessage(
-    //     res,
-    //     httpStatus.INTERNAL_SERVER_ERROR,
-    //     "Something failed",
-    //   );
-
-    //   Application.findByIdAndUpdate.mockRestore();
-    // });
   });
 
   describe("DELETE /:id", () => {

@@ -160,7 +160,7 @@ exports.deleteMultipleEvents = async (req, res) => {
     { new: true },
   );
 
-  if (result.nModified === 0)
+  if (result.modifiedCount === 0)
     return res
       .status(httpStatus.NOT_FOUND)
       .send("No events with the provided IDs were found.");

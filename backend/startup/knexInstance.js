@@ -1,6 +1,7 @@
 const knex = require("knex");
 const knexFile = require("../models/postgres/knexfile");
 
-const knexInstance = knex(knexFile.development);
+const env = process.env.NODE_ENV;
+const knexInstance = knex(knexFile[env]);
 
 module.exports = knexInstance;

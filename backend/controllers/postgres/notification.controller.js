@@ -75,7 +75,7 @@ exports.createNotification = async (req, res) => {
   };
 
   const createdNotification = await Notification.create(newNotification);
-  return res.status(status.CREATED).send(createdNotification);
+  return res.status(status.CREATED).send(createdNotification[0]);
 };
 
 exports.updateNotification = async (req, res) => {
@@ -110,7 +110,7 @@ exports.updateNotification = async (req, res) => {
 
 exports.deactivateNotification = async (req, res) => {
   const deactivatedNotification = await Notification.deactivate(req.params.id);
-  if (!deactivatedNotification)
+  if (!deactivatedNotification.length)
     return res
       .status(status.NOT_FOUND)
       .send("The notification with the given ID was not found.");
@@ -123,7 +123,7 @@ exports.deactivateNotification = async (req, res) => {
 
 exports.deleteNotification = async (req, res) => {
   const deletedNotification = await Notification.delete(req.params.id);
-  if (!deletedNotification)
+  if (!deletedNotification.length)
     return res
       .status(status.NOT_FOUND)
       .send("The notification with the given ID was not found.");

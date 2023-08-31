@@ -64,7 +64,7 @@ exports.createApplication = async (req, res) => {
       .status(httpStatus.INTERNAL_SERVER_ERROR)
       .send("The application could not be created.");
 
-  return res.status(httpStatus.CREATED).send(newApplication);
+  return res.status(httpStatus.CREATED).send(newApplication[0]);
 };
 
 exports.updateApplication = async (req, res) => {
@@ -88,7 +88,7 @@ exports.updateApplication = async (req, res) => {
 
 exports.deactivateApplication = async (req, res) => {
   const deactivatedApplication = await Application.deactivate(req.params.id);
-  if (!deactivatedApplication)
+  if (!deactivatedApplication.length)
     return res.status(httpStatus.NOT_FOUND).send("Application not found.");
 
   return res.status(httpStatus.OK).send(deactivatedApplication);
@@ -96,7 +96,7 @@ exports.deactivateApplication = async (req, res) => {
 
 exports.deleteApplication = async (req, res) => {
   const deletedApplication = await Application.delete(req.params.id);
-  if (!deletedApplication)
+  if (!deletedApplication.length)
     return res.status(httpStatus.NOT_FOUND).send("Application not found.");
 
   return res.status(httpStatus.OK).send(deletedApplication);

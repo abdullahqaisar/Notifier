@@ -68,7 +68,7 @@ exports.createEvent = async (req, res) => {
   const newEvent = await Event.create(req.body);
   return res
     .status(httpStatus.CREATED)
-    .send({ message: "Event created successfully.", event: newEvent });
+    .send({ message: "Event created successfully.", event: newEvent[0] });
 };
 
 exports.updateEvent = async (req, res) => {
@@ -93,7 +93,7 @@ exports.updateEvent = async (req, res) => {
 
 exports.deactivateEvent = async (req, res) => {
   const deactivatedEvent = await Event.deactivate(req.params.id);
-  if (!deactivatedEvent)
+  if (!deactivatedEvent.length)
     return res
       .status(httpStatus.NOT_FOUND)
       .send("The event with the given ID was not found.");
@@ -106,9 +106,9 @@ exports.deactivateEvent = async (req, res) => {
 
 exports.deleteEvent = async (req, res) => {
   const deletedEvent = await Event.delete(req.params.id);
-  if (!deletedEvent)
+  if (!deletedEvent.length)
     return res
-      .status(httpStatus.NOT_FOUND)
+      .status(httpStatus.length)
       .send("The event with the given ID was not found.");
 
   return res

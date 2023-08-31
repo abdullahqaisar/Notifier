@@ -5,6 +5,7 @@ const { Event } = require("../../models/mongo/event.model");
 
 // controller to get all notifications
 exports.getAllNotifications = async (req, res) => {
+  console.log("getAllNotifications");
   const {
     page = config.get("defaultPage"),
     pageSize = config.get("defaultPageSize"),
@@ -28,8 +29,8 @@ exports.getAllNotifications = async (req, res) => {
     return res.status(httpStatus.NOT_FOUND).send("No notifications found.");
 
   const response = {
-    currentPage: page,
-    pageSize,
+    currentPage: parseInt(page, 10),
+    pageSize: parseInt(pageSize, 10),
     totalCount,
     notifications,
   };

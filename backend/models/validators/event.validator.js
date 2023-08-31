@@ -12,8 +12,8 @@ function validateEvent(data) {
 
 function validateGetAllEvents(data) {
   const schema = Joi.object({
-    applicationId: Joi.any().required(), // fix for mongo
-    // applicationId: Joi.objectId().required(), // fix for postgres
+    // applicationId: Joi.any().required(), // fix for mongo
+    applicationId: Joi.objectId().required(), // fix for postgres
     page: Joi.number().integer().min(1),
     pageSize: Joi.number().integer().min(1),
     name: Joi.string().min(1).max(50),
