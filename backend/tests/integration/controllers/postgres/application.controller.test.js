@@ -5,42 +5,49 @@ const request = require("supertest");
 const httpStatus = require("http-status");
 const config = require("config");
 const knex = require("../../../../startup/knexInstance");
-const app = require("../../../../index");
 const Application = require("../../../../models/postgres/application.model");
 
+let server;
 let mockApplication;
 
 describe("Integration Tests - Application Controller", () => {
   beforeAll(async () => {
-    await knex.migrate.latest();
+    // eslint-disable-next-line global-require
+    server = require("../../../../index");
   });
 
   afterAll(async () => {
     await knex.migrate.rollback(true);
+    await server.close();
     await knex.destroy();
-    app.close();
   });
 
   beforeEach(async () => {
-    await knex("applications").del();
-    mockApplication = await Application.create({
-      name: "Mock Application",
-      description: "This is a mock application",
-    });
+    await knex.migrate.latest();
+  });
 
-    mockApplication[0].createdDate =
-      mockApplication[0].createdDate.toISOString();
-    mockApplication[0].modifiedDate =
-      mockApplication[0].modifiedDate.toISOString();
+  afterEach(async () => {
+    await knex.migrate.rollback(true);
   });
 
   describe("GET /api/applications", () => {
+    beforeEach(async () => {
+      mockApplication = await Application.create({
+        name: "Mock Application",
+        description: "This is a mock application",
+      });
+
+      mockApplication[0].createdDate =
+        mockApplication[0].createdDate.toISOString();
+      mockApplication[0].modifiedDate =
+        mockApplication[0].modifiedDate.toISOString();
+    });
     afterEach(async () => {
       await knex("applications").del();
     });
 
     it("should return all applications with default parameters", async () => {
-      const res = await request(app).get("/api/applications");
+      const res = await request(server).get("/api/applications");
 
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body.currentPage).toBe(config.get("defaultPage"));
@@ -51,7 +58,9 @@ describe("Integration Tests - Application Controller", () => {
     });
 
     it("should return applications with pagination", async () => {
-      const res = await request(app).get("/api/applications?page=1&pageSize=2");
+      const res = await request(server).get(
+        "/api/applications?page=1&pageSize=2",
+      );
 
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body.currentPage).toBe(1);
@@ -62,7 +71,7 @@ describe("Integration Tests - Application Controller", () => {
     });
 
     it("should return applications with sorting", async () => {
-      const res = await request(app).get("/api/applications?sort=name:asc");
+      const res = await request(server).get("/api/applications?sort=name:asc");
 
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body.applications).toHaveLength(1);
@@ -70,7 +79,7 @@ describe("Integration Tests - Application Controller", () => {
     });
 
     it("should return applications with filtering", async () => {
-      const res = await request(app).get("/api/applications?name=App");
+      const res = await request(server).get("/api/applications?name=app");
 
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body.applications).toHaveLength(1);
@@ -80,7 +89,7 @@ describe("Integration Tests - Application Controller", () => {
     it("should handle error if no applications are found", async () => {
       await knex("applications").del();
 
-      const res = await request(app).get("/api/applications");
+      const res = await request(server).get("/api/applications");
 
       expect(res.status).toBe(httpStatus.NOT_FOUND);
       expect(res.text).toBe("No applications found.");
@@ -88,19 +97,32 @@ describe("Integration Tests - Application Controller", () => {
   });
 
   describe("GET /api/applications/:id", () => {
+    beforeEach(async () => {
+      mockApplication = await Application.create({
+        name: "Mock Application",
+        description: "This is a mock application",
+      });
+      mockApplication[0].createdDate =
+        mockApplication[0].createdDate.toISOString();
+      mockApplication[0].modifiedDate =
+        mockApplication[0].modifiedDate.toISOString();
+    });
     it("should return an application with the given id", async () => {
-      const res = await request(app).get(
+      const res = await request(server).get(
         `/api/applications/${mockApplication[0].id}`,
       );
 
       expect(res.status).toBe(httpStatus.OK);
+      expect(res.body).toMatchObject(mockApplication[0]);
       expect(res.body).toMatchObject(mockApplication[0]);
     });
 
     it("should handle error if application is not found", async () => {
       const nonExistentId = "990099";
 
-      const res = await request(app).get(`/api/applications/${nonExistentId}`);
+      const res = await request(server).get(
+        `/api/applications/${nonExistentId}`,
+      );
 
       expect(res.status).toBe(httpStatus.NOT_FOUND);
       expect(res.text).toBe("Application not found.");
@@ -114,7 +136,7 @@ describe("Integration Tests - Application Controller", () => {
         description: "This is a new application",
       };
 
-      const res = await request(app)
+      const res = await request(server)
         .post("/api/applications")
         .send(newApplicationData);
 
@@ -135,7 +157,7 @@ describe("Integration Tests - Application Controller", () => {
 
       await Application.create(existingApplicationData);
 
-      const res = await request(app)
+      const res = await request(server)
         .post("/api/applications")
         .send(existingApplicationData);
 
@@ -153,7 +175,7 @@ describe("Integration Tests - Application Controller", () => {
         description: "This is a new application",
       };
 
-      const res = await request(app)
+      const res = await request(server)
         .post("/api/applications")
         .send(newApplicationData);
 
@@ -177,7 +199,7 @@ describe("Integration Tests - Application Controller", () => {
         description: "This is an updated application",
       };
 
-      const res = await request(app)
+      const res = await request(server)
         .patch(`/api/applications/${createdApplication[0].id}`)
         .send(updatedApplicationData);
       expect(res.status).toBe(httpStatus.OK);
@@ -201,7 +223,7 @@ describe("Integration Tests - Application Controller", () => {
       );
 
       // Attempt to update conflicting application with existing application's name
-      const res = await request(app)
+      const res = await request(server)
         .patch(`/api/applications/${conflictingApplication[0].id}`)
         .send(existingApplicationData);
 
@@ -225,7 +247,7 @@ describe("Integration Tests - Application Controller", () => {
         description: "This is an updated application",
       };
 
-      const res = await request(app)
+      const res = await request(server)
         .patch(`/api/applications/${createdApplication[0].id}`)
         .send(updatedApplicationData);
 
@@ -244,7 +266,7 @@ describe("Integration Tests - Application Controller", () => {
       };
       const createdApplication = await Application.create(mockApplicationData);
 
-      const res = await request(app).patch(
+      const res = await request(server).patch(
         `/api/applications/${createdApplication[0].id}/deactivate`,
       );
 
@@ -255,7 +277,7 @@ describe("Integration Tests - Application Controller", () => {
     it("should handle error if application is not found", async () => {
       const nonExistentId = "990099";
 
-      const res = await request(app).patch(
+      const res = await request(server).patch(
         `/api/applications/${nonExistentId}/deactivate`,
       );
 
@@ -272,7 +294,7 @@ describe("Integration Tests - Application Controller", () => {
       };
       const createdApplication = await Application.create(mockApplicationData);
 
-      const res = await request(app).delete(
+      const res = await request(server).delete(
         `/api/applications/${createdApplication[0].id}`,
       );
 
@@ -283,7 +305,7 @@ describe("Integration Tests - Application Controller", () => {
     it("should handle error if application is not found", async () => {
       const nonExistentId = "990099";
 
-      const res = await request(app).delete(
+      const res = await request(server).delete(
         `/api/applications/${nonExistentId}`,
       );
 
