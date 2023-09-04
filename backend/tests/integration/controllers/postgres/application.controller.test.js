@@ -71,7 +71,7 @@ describe("Integration Tests - Application Controller", () => {
     });
 
     it("should return applications with sorting", async () => {
-      const res = await request(server).get("/api/applications?sort=name:asc");
+      const res = await request(server).get("/api/applications?sort=name");
 
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body.applications).toHaveLength(1);
@@ -143,8 +143,11 @@ describe("Integration Tests - Application Controller", () => {
       expect(res.status).toBe(httpStatus.CREATED);
       expect(res.body.name).toBe(newApplicationData.name);
       expect(res.body.description).toBe(newApplicationData.description);
+      expect(res.body.isActive).toBe(true);
+      expect(res.body.isDeleted).toBe(false);
+      expect(res.body.createdDate).toBeDefined();
+      expect(res.body.modifiedDate).toBeDefined();
 
-      // Assert that the application was actually created in the database
       const createdApplication = await Application.getById(res.body.id);
       expect(createdApplication).toMatchObject(newApplicationData);
     });
@@ -205,6 +208,10 @@ describe("Integration Tests - Application Controller", () => {
       expect(res.status).toBe(httpStatus.OK);
       expect(res.body[0].name).toBe(updatedApplicationData.name);
       expect(res.body[0].description).toBe(updatedApplicationData.description);
+      expect(res.body[0].isActive).toBe(true);
+      expect(res.body[0].isDeleted).toBe(false);
+      expect(res.body[0].createdDate).toBeDefined();
+      expect(res.body[0].modifiedDate).toBeDefined();
     });
 
     it("should handle conflict if updated application name already exists", async () => {

@@ -88,6 +88,7 @@ exports.updateApplication = async (req, res) => {
 
 exports.deactivateApplication = async (req, res) => {
   const deactivatedApplication = await Application.deactivate(req.params.id);
+
   if (!deactivatedApplication.length)
     return res.status(httpStatus.NOT_FOUND).send("Application not found.");
 

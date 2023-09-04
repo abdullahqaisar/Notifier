@@ -1,32 +1,35 @@
-const httpStatus = require("http-status");
+const { StatusCodes } = require("http-status-codes");
 const config = require("config");
 const { Notification } = require("../../models/mongo/notification.model");
 const { Event } = require("../../models/mongo/event.model");
 
 // controller to get all notifications
 exports.getAllNotifications = async (req, res) => {
-  console.log("getAllNotifications");
   const {
     page = config.get("defaultPage"),
     pageSize = config.get("defaultPageSize"),
     sort = config.get("defaultSort"),
+    eventId,
+    name,
   } = req.query;
 
   const query = {
     isDeleted: false,
-    eventId: req.query.eventId,
   };
 
-  if (req.query.name) query.name = { $regex: req.query.name, $options: "i" };
+  if (eventId) query.eventId = eventId;
+  if (name) query.name = { $regex: new RegExp(name, "i") };
 
-  // try this in one query
   const totalCount = await Notification.countDocuments(query);
   const notifications = await Notification.find(query)
     .sort(sort)
     .skip((page - 1) * pageSize)
     .limit(pageSize);
-  if (!notifications.length)
-    return res.status(httpStatus.NOT_FOUND).send("No notifications found.");
+
+  if (notifications.length === 0)
+    return res.status(StatusCodes.NOT_FOUND).json({
+      message: "No notifications found.",
+    });
 
   const response = {
     currentPage: parseInt(page, 10),
@@ -34,125 +37,147 @@ exports.getAllNotifications = async (req, res) => {
     totalCount,
     notifications,
   };
-  return res.status(httpStatus.OK).send(response);
+
+  return res.status(StatusCodes.OK).json(response);
 };
 
 // Controller to get single notification by Id
 exports.getNotificationById = async (req, res) => {
   const notification = await Notification.findById(req.params.id);
-  if (!notification)
-    return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The notification with the given ID was not found.");
 
-  return res.status(httpStatus.OK).send(notification);
+  if (!notification) {
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: "Notification not found" });
+  }
+
+  return res.status(StatusCodes.OK).json(notification);
 };
 
 // Controller to create a new notification
 exports.createNotification = async (req, res) => {
-  const event = await Event.findById(req.body.eventId);
+  const { eventId, name, templateBody } = req.body;
+
+  const event = await Event.findById(eventId);
+
   if (!event)
     return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The event with the given ID was not found.");
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: "Event not found" });
 
   const existingNotification = await Notification.findOne({
-    name: req.body.name,
-    eventId: req.body.eventId,
+    name,
+    eventId,
   });
+
   if (existingNotification)
     return res
-      .status(httpStatus.CONFLICT)
-      .send("Notification with the given name already exists.");
+      .status(StatusCodes.CONFLICT)
+      .json({ message: "Notification with the given name already exists." });
 
-  const templateTags = req.body.templateBody.match(/{(.*?)}/g) || [];
+  const templateTags = templateBody.match(/{(.*?)}/g) || [];
+  const notificationTags = templateTags.map((tag) => tag.slice(1, -1));
 
-  req.body.notificationTags = templateTags.map((tag) => tag.slice(1, -1));
-  let notification = new Notification(req.body);
-  notification = await notification.save();
+  const notification = new Notification({ ...req.body, notificationTags });
 
-  if (!notification)
+  const savedNotification = await notification.save();
+
+  if (!savedNotification)
     return res
-      .status(httpStatus.INTERNAL_SERVER_ERROR)
-      .send("The notification could not be created.");
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: "The notification could not be created." });
 
-  return res
-    .status(httpStatus.CREATED)
-    .send({ message: "Notification created successfully.", notification });
+  return res.status(StatusCodes.CREATED).json({
+    message: "Notification created successfully.",
+    notification: savedNotification,
+  });
 };
 
 // Controller to update an existing notification
 exports.updateNotification = async (req, res) => {
-  let notification = await Notification.findById(req.params.id);
+  const notification = await Notification.findById(req.params.id);
+
   if (!notification)
     return res
-      .status(httpStatus.NOT_FOUND)
-      .send({ error: "The notification with the given ID was not found" });
+      .status(StatusCodes.NOT_FOUND)
+      .json({ error: "Notification not found" });
 
   const { eventId } = notification;
+  const { name, templateBody } = req.body;
+
   const existingNotification = await Notification.findOne({
-    name: req.body.name,
+    name,
     eventId,
     isDeleted: false,
     _id: { $ne: req.params.id },
   });
+
   if (existingNotification)
     return res
-      .status(httpStatus.CONFLICT)
-      .send({ error: "Notification with the given name already exists." });
+      .status(StatusCodes.CONFLICT)
+      .json({ error: "Notification with the given name already exists." });
 
   Object.assign(notification, req.body);
 
-  const templateTags = req.body.templateBody.match(/{(.*?)}/g) || [];
+  const templateTags = templateBody.match(/{(.*?)}/g) || [];
   notification.notificationTags = templateTags.map((tag) => tag.slice(1, -1));
   notification.modifiedDate = Date.now();
 
-  notification = await notification.save();
+  const updatedNotification = await notification.save();
 
-  if (!notification)
+  if (!updatedNotification) {
     return res
-      .status(httpStatus.INTERNAL_SERVER_ERROR)
-      .send({ error: "The notification could not be updated." });
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ error: "The notification could not be updated." });
+  }
 
-  return res
-    .status(httpStatus.OK)
-    .send({ message: "Notification updated successfully.", notification });
+  return res.status(StatusCodes.OK).json({
+    message: "Notification updated successfully.",
+    notification: updatedNotification,
+  });
 };
 
 // Controller to deactivate an existing notification
 exports.deactivateNotification = async (req, res) => {
-  const notification = await Notification.findByIdAndUpdate(
-    req.params.id,
-    {
-      isActive: false,
-    },
-    { new: true },
-  );
-  if (!notification) {
+  const notification = await Notification.findById(req.params.id);
+
+  if (!notification)
     return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The notification with the given ID was not found.");
-  }
-  return res
-    .status(httpStatus.OK)
-    .send({ message: "Notification deactivated successfully.", notification });
+      .status(StatusCodes.NOT_FOUND)
+      .json({ error: "Notification not found" });
+
+  notification.isActive = false;
+  notification.modifiedDate = Date.now();
+
+  const updatedNotification = await notification.save();
+
+  if (!updatedNotification)
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ error: "The notification could not be updated." });
+
+  return res.status(StatusCodes.OK).json({
+    message: "Notification deactivated successfully.",
+    notification: updatedNotification,
+  });
 };
 
 // Controller to delete an existing notification
 exports.deleteNotification = async (req, res) => {
-  const notification = await Notification.findByIdAndUpdate(
-    req.params.id,
-    {
-      isDeleted: true,
-    },
-    { new: true },
-  );
-  if (!notification) {
+  const notification = await Notification.findById(req.params.id);
+
+  if (!notification)
     return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The notification with the given ID was not found.");
-  }
-  return res
-    .status(httpStatus.OK)
-    .send({ message: "Notification deleted successfully.", notification });
+      .status(StatusCodes.NOT_FOUND)
+      .json({ error: "Notification not found" });
+
+  notification.isDeleted = true;
+  notification.modifiedDate = Date.now();
+
+  await notification.save();
+
+  return res.status(StatusCodes.OK).json({
+    message: "Notification deleted successfully.",
+    notification,
+  });
 };

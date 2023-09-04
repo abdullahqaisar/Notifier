@@ -6,8 +6,8 @@ module.exports = {
     client: "postgresql",
     connection: {
       database: config.get("databases.postgres.dbname"),
-      user: process.env.POSTGRES_USERNAME,
-      password: process.env.POSTGRES_PASSWORD,
+      user: "postgres",
+      password: "abdullah",
     },
     pool: {
       min: 2,
@@ -27,8 +27,8 @@ module.exports = {
     client: "postgresql",
     connection: {
       database: config.get("databases.postgres.dbname"),
-      user: process.env.POSTGRES_USERNAME,
-      password: process.env.POSTGRES_PASSWORD,
+      user: "postgres",
+      password: "abdullah",
     },
     pool: {
       min: 2,

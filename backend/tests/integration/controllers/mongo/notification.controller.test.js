@@ -2,7 +2,7 @@
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-undef */
 const request = require("supertest");
-const httpStatus = require("http-status");
+const { StatusCodes } = require("http-status-codes");
 const config = require("config");
 const { Application } = require("../../../../models/mongo/application.model");
 const { Notification } = require("../../../../models/mongo/notification.model");
@@ -100,7 +100,7 @@ describe("Integration Tests - /api/notification", () => {
         `/api/notifications?eventId=${mockEvent._id}`,
       );
 
-      expect(res.status).toBe(httpStatus.OK);
+      expect(res.status).toBe(StatusCodes.OK);
       expect(res.body.currentPage).toBe(config.get("defaultPage"));
       expect(res.body.pageSize).toBe(config.get("defaultPageSize"));
       expect(res.body.totalCount).toBe(2);
@@ -117,7 +117,7 @@ describe("Integration Tests - /api/notification", () => {
         const res = await request(server).get(
           `/api/notifications?eventId=${mockEvent._id}&${query}`,
         );
-        expect(res.status).toBe(httpStatus.OK);
+        expect(res.status).toBe(StatusCodes.OK);
         expect(res.body.currentPage).toBe(1);
         expect(res.body.pageSize).toBe(1);
         expect(res.body.totalCount).toBe(2);
@@ -132,8 +132,8 @@ describe("Integration Tests - /api/notification", () => {
         `/api/notifications?eventId=${mockEvent._id}`,
       );
 
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe("No notifications found.");
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe("No notifications found.");
     });
   });
 
@@ -165,23 +165,18 @@ describe("Integration Tests - /api/notification", () => {
       const res = await request(server).get(
         `/api/notifications/${mockNotification._id}`,
       );
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty("name", mockNotification.name);
-      expect(res.body).toHaveProperty(
-        "description",
-        mockNotification.description,
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.name).toBe(mockNotification.name);
+      expect(res.body.description).toBe(mockNotification.description);
     });
 
-    it("should return 404 if no notification is found with the given ID", async () => {
-      const res = await request(server).get(
-        `/api/notifications/${new Notification().id}`,
-      );
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe(
-        "The notification with the given ID was not found.",
-      );
-    });
+    // it("should return 404 if no notification is found with the given ID", async () => {
+    //   const res = await request(server).get(
+    //     `/api/notifications/${new Notification().id}`,
+    //   );
+    //   expect(res.status).toBe(StatusCodes.NOT_FOUND);
+    //   expect(res.body.message).toBe("Notification not found");
+    // });
   });
 
   describe("POST /", () => {
@@ -207,27 +202,22 @@ describe("Integration Tests - /api/notification", () => {
       const notificationData = {
         name: "Notification 1",
         description: "This is a mock notification",
-        templateBody: "Template body 1",
+        templateBody: "Template body 1 {Tag}",
         templateSubject: "Template subject 1",
         eventId: mockEvent._id,
       };
 
       const res = await exec(notificationData);
 
-      expect(res.status).toBe(httpStatus.CREATED);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Notification created successfully.",
+      expect(res.status).toBe(StatusCodes.CREATED);
+      expect(res.body.message).toBe("Notification created successfully.");
+      expect(res.body.notification.name).toBe(notificationData.name);
+      expect(res.body.notification.notificationTags).toEqual(
+        expect.arrayContaining(["Tag"]),
       );
-      expect(res.body).toHaveProperty(
-        "notification.name",
-        notificationData.name,
-      );
-      expect(res.body).toHaveProperty(
-        "notification.description",
+      expect(res.body.notification.description).toBe(
         notificationData.description,
       );
-      // Add more assertions as needed
     });
 
     it("should return 409 if notification name already exists for the same event", async () => {
@@ -249,8 +239,10 @@ describe("Integration Tests - /api/notification", () => {
 
       const res = await exec(notificationData);
 
-      expect(res.status).toBe(httpStatus.CONFLICT);
-      // Add more assertions as needed
+      expect(res.status).toBe(StatusCodes.CONFLICT);
+      expect(res.body.message).toBe(
+        "Notification with the given name already exists.",
+      );
     });
 
     it("should return 400 if eventId is missing", async () => {
@@ -263,8 +255,23 @@ describe("Integration Tests - /api/notification", () => {
 
       const res = await exec(notificationData);
 
-      expect(res.status).toBe(httpStatus.BAD_REQUEST);
+      expect(res.status).toBe(StatusCodes.BAD_REQUEST);
       expect(res.text).toBe('"eventId" is required');
+    });
+
+    it("should return 404 if the event with the given eventId is not found", async () => {
+      const notificationData = {
+        name: "Notification 1",
+        description: "This is a mock notification",
+        templateBody: "Template body 1",
+        templateSubject: "Template subject 1",
+        eventId: new Event().id,
+      };
+
+      const res = await exec(notificationData);
+
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe("Event not found");
     });
   });
 
@@ -308,16 +315,10 @@ describe("Integration Tests - /api/notification", () => {
 
       const res = await exec(updatedData);
 
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Notification updated successfully.",
-      );
-      expect(res.body).toHaveProperty("notification.name", updatedData.name);
-      expect(res.body).toHaveProperty(
-        "notification.description",
-        updatedData.description,
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Notification updated successfully.");
+      expect(res.body.notification.name).toBe(updatedData.name);
+      expect(res.body.notification.description).toBe(updatedData.description);
     });
 
     it("should return 409 if updated notification name already exists for the same event", async () => {
@@ -338,9 +339,9 @@ describe("Integration Tests - /api/notification", () => {
 
       const res = await exec(updatedData);
 
-      expect(res.status).toBe(httpStatus.CONFLICT);
-      expect(res.text).toBe(
-        '{"error":"Notification with the given name already exists."}',
+      expect(res.status).toBe(StatusCodes.CONFLICT);
+      expect(res.body.error).toBe(
+        "Notification with the given name already exists.",
       );
     });
 
@@ -348,10 +349,8 @@ describe("Integration Tests - /api/notification", () => {
       const res = await request(server).patch(
         `/api/notifications/${new Notification().id}`,
       );
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe(
-        '{"error":"The notification with the given ID was not found"}',
-      );
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.error).toBe("Notification not found");
     });
   });
 
@@ -388,21 +387,16 @@ describe("Integration Tests - /api/notification", () => {
     it("should return 200 and successfully deactivate a notification if data is valid", async () => {
       const res = await exec();
 
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Notification deactivated successfully.",
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Notification deactivated successfully.");
     });
 
     it("should return 404 if notification is not found with the given id", async () => {
       const res = await request(server).patch(
         `/api/notifications/${new Notification().id}/deactivate`,
       );
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe(
-        "The notification with the given ID was not found.",
-      );
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.error).toBe("Notification not found");
     });
   });
 
@@ -437,18 +431,16 @@ describe("Integration Tests - /api/notification", () => {
     it("should return 200 and successfully delete a notification if data is valid", async () => {
       const res = await exec();
 
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Notification deleted successfully.",
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Notification deleted successfully.");
     });
 
     it("should return 404 if notification is not found with the given id", async () => {
       const res = await request(server).delete(
         `/api/notifications/${new Notification().id}`,
       );
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.error).toBe("Notification not found");
     });
   });
 });

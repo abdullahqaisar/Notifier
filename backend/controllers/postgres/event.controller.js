@@ -108,7 +108,7 @@ exports.deleteEvent = async (req, res) => {
   const deletedEvent = await Event.delete(req.params.id);
   if (!deletedEvent.length)
     return res
-      .status(httpStatus.length)
+      .status(httpStatus.NOT_FOUND)
       .send("The event with the given ID was not found.");
 
   return res

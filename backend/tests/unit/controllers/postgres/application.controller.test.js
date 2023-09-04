@@ -89,16 +89,20 @@ describe("Application Controller - Unit Tests", () => {
       const req = httpMocks.createRequest({
         body: {
           name: "App 1",
+          description: "This is app 1",
         },
       });
       Application.getByAppName = jest.fn().mockResolvedValue(null);
-      Application.create = jest.fn().mockResolvedValue({ name: "App 1" });
+      Application.create = jest
+        .fn()
+        .mockResolvedValue([{ name: "App 1", description: "This is app 1" }]);
 
       await applicationController.createApplication(req, res);
 
       const responseData = res._getData();
-      expect(responseData.name).toBe("App 1");
       expect(res.statusCode).toBe(httpStatus.CREATED);
+      expect(responseData.name).toBe("App 1");
+      expect(responseData.description).toBe("This is app 1");
     });
 
     it("should handle error when application already exists", async () => {

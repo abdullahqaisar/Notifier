@@ -14,7 +14,13 @@ function validateGetAllApplications(data) {
     pageSize: Joi.number().integer().min(1),
     isActive: Joi.boolean(),
     name: Joi.string().min(1).max(50),
-    sort: Joi.string().min(1).max(50),
+    sort: Joi.string().valid(
+      "name",
+      "id",
+      "isActive",
+      "createdDate",
+      "updatedDate",
+    ),
   });
 
   return schema.validate(data);

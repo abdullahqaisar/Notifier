@@ -2,8 +2,9 @@
 /* eslint-disable no-underscore-dangle */
 /* eslint-disable no-undef */
 const request = require("supertest");
-const httpStatus = require("http-status");
 const config = require("config");
+const mongoose = require("mongoose");
+const { StatusCodes, getReasonPhrase } = require("http-status-codes");
 const { Application } = require("../../../../models/mongo/application.model");
 const { Event } = require("../../../../models/mongo/event.model");
 
@@ -18,7 +19,7 @@ const createMockApplication = async (name, description) => {
   return application;
 };
 
-const createMockEvent = async (name, description, applicationId) => {
+const createMockEvent = async (name, description) => {
   const event = new Event({
     name,
     description,
@@ -36,8 +37,8 @@ describe("Integration Tests - /api/events", () => {
 
   afterEach(async () => {
     await server.close();
-    await Application.deleteMany({});
     await Event.deleteMany({});
+    await Application.deleteMany({});
   });
 
   describe("GET /api/events", () => {
@@ -67,11 +68,12 @@ describe("Integration Tests - /api/events", () => {
         `/api/events?applicationId=${mockApplication.id}`,
       );
 
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body.currentPage).toBe(config.get("defaultPage"));
-      expect(res.body.pageSize).toBe(config.get("defaultPageSize"));
-      expect(res.body.totalCount).toBe(2);
-      expect(res.body.events).toHaveLength(2);
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe(getReasonPhrase(StatusCodes.OK));
+      expect(res.body.data.currentPage).toBe(config.get("defaultPage"));
+      expect(res.body.data.pageSize).toBe(config.get("defaultPageSize"));
+      expect(res.body.data.totalCount).toBe(2);
+      expect(res.body.data.events).toHaveLength(2);
     });
 
     it.each([
@@ -82,12 +84,13 @@ describe("Integration Tests - /api/events", () => {
       const res = await request(server).get(
         `/api/events?applicationId=${mockApplication.id}&${query}`,
       );
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body.currentPage).toBe(1);
-      expect(res.body.pageSize).toBe(1);
-      expect(res.body.totalCount).toBe(2);
-      expect(res.body.events).toHaveLength(expectedCount);
-      expect(res.body.events[0].name).toBe(event1.name);
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe(getReasonPhrase(StatusCodes.OK));
+      expect(res.body.data.currentPage).toBe(1);
+      expect(res.body.data.pageSize).toBe(1);
+      expect(res.body.data.totalCount).toBe(2);
+      expect(res.body.data.events).toHaveLength(expectedCount);
+      expect(res.body.data.events[0].name).toBe(event1.name);
     });
 
     it("should handle error if events are not found", async () => {
@@ -96,8 +99,8 @@ describe("Integration Tests - /api/events", () => {
         `/api/events?applicationId=${mockApplication.id}`,
       );
 
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe("No events found.");
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe(getReasonPhrase(StatusCodes.NOT_FOUND));
     });
   });
 
@@ -116,17 +119,18 @@ describe("Integration Tests - /api/events", () => {
         mockApplication._id,
       );
     });
+
     it("should return an event if valid id is passed", async () => {
       const res = await request(server).get(`/api/events/${event._id}`);
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty("name", event.name);
-      expect(res.body).toHaveProperty("description", event.description);
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.data).toHaveProperty("name", event.name);
+      expect(res.body.data).toHaveProperty("description", event.description);
     });
 
     it("should return 404 if no event is found with the given id", async () => {
       const res = await request(server).get(`/api/events/${new Event().id}`);
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
-      expect(res.text).toBe("The event with the given ID was not found.");
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe("Event not found");
     });
   });
 
@@ -150,12 +154,11 @@ describe("Integration Tests - /api/events", () => {
 
     it("should return 201 and successfully create a new event if data is valid", async () => {
       const res = await exec();
-      expect(res.status).toBe(httpStatus.CREATED);
-      expect(res.body).toHaveProperty("message", "Event created successfully.");
-      expect(res.body).toHaveProperty("event.name", event.name);
-      expect(res.body).toHaveProperty("event.description", event.description);
-      // check if the event has application id
-      expect(res.body).toHaveProperty("event.applicationId");
+      expect(res.status).toBe(StatusCodes.CREATED);
+      expect(res.body.message).toBe("Event created successfully.");
+      expect(res.body.event).toHaveProperty("name", event.name);
+      expect(res.body.event).toHaveProperty("description", event.description);
+      expect(res.body.event).toHaveProperty("applicationId");
     });
 
     it("should return 409 if event name already exists in the same application", async () => {
@@ -165,8 +168,8 @@ describe("Integration Tests - /api/events", () => {
         mockApplication._id,
       );
       const res = await exec();
-      expect(res.status).toBe(httpStatus.CONFLICT);
-      expect(res.text).toBe(
+      expect(res.status).toBe(StatusCodes.CONFLICT);
+      expect(res.body.message).toBe(
         "An event with this name already exists in this application.",
       );
     });
@@ -174,9 +177,24 @@ describe("Integration Tests - /api/events", () => {
     it("should return 400 if applicationId is missing", async () => {
       delete event.applicationId;
       const res = await exec();
-      expect(res.status).toBe(httpStatus.BAD_REQUEST);
+      expect(res.status).toBe(StatusCodes.BAD_REQUEST);
       expect(res.text).toBe('"applicationId" is required');
     });
+
+    it("should return 404 if application with the given applicationId is not found", async () => {
+      event.applicationId = new mongoose.Types.ObjectId();
+      const res = await exec();
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe("Application not found");
+    });
+
+    // it("should return 500 if event could not be created", async () => {
+    //   jest.spyOn(Event.prototype, "save").mockRejectedValueOnce(new Error());
+    //   const res = await exec();
+    //   expect(res.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
+    //   expect(res.body.message).toBe("The event could not be created.");
+    //   Event.prototype.save.mockRestore();
+    // });
   });
 
   describe("PATCH /api/events/:id", () => {
@@ -202,19 +220,19 @@ describe("Integration Tests - /api/events", () => {
     });
 
     const exec = async () => {
-      const req = request(server)
+      const res = await request(server)
         .patch(`/api/events/${event._id}`)
         .send(updatedEvent);
-      return req;
+      return res;
     };
 
     it("should return 200 and successfully update an event if data is valid", async () => {
       const res = await exec();
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty("message", "Event updated successfully.");
-      expect(res.body).toHaveProperty("event.name", updatedEvent.name);
-      expect(res.body).toHaveProperty(
-        "event.description",
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Event updated successfully.");
+      expect(res.body.event).toHaveProperty("name", updatedEvent.name);
+      expect(res.body.event).toHaveProperty(
+        "description",
         updatedEvent.description,
       );
     });
@@ -228,16 +246,25 @@ describe("Integration Tests - /api/events", () => {
       updatedEvent.name = "Event 2";
 
       const res = await exec();
-      expect(res.status).toBe(httpStatus.CONFLICT);
+      expect(res.status).toBe(StatusCodes.CONFLICT);
       expect(res.text).toBe(
         "An event with this name already exists in this application.",
       );
     });
 
     it("should return 404 if no event is found with the given id", async () => {
-      const res = await request(server).put(`/api/events/${new Event().id}`);
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
+      const res = await request(server).patch(`/api/events/${new Event().id}`);
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.text).toBe("The event with the given ID was not found");
     });
+
+    // it("should return 500 if an error occurs while updating the event", async () => {
+    //   jest.spyOn(Event.prototype, "save").mockRejectedValueOnce(new Error());
+    //   const res = await exec();
+    //   expect(res.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
+    //   expect(res.body.error).toBe("An error occurred while updating the event");
+    //   Event.prototype.save.mockRestore();
+    // });
   });
 
   describe("PATCH /api/events/:id/deactivate", () => {
@@ -261,19 +288,28 @@ describe("Integration Tests - /api/events", () => {
 
     it("should return 200 and successfully deactivate an event if data is valid", async () => {
       const res = await exec();
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Event deactivated successfully.",
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Event deactivated successfully.");
+      expect(res.body.event.isActive).toBe(false);
     });
 
     it("should return 404 if no event is found with the given id", async () => {
-      const res = await request(server).put(
+      const res = await request(server).patch(
         `/api/events/${new Event().id}/deactivate`,
       );
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe("Event not found");
     });
+
+    // it("should return 500 if an error occurs while deactivating the event", async () => {
+    //   jest.spyOn(Event.prototype, "save").mockRejectedValueOnce(new Error());
+    //   const res = await exec();
+    //   expect(res.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
+    //   expect(res.body.error).toBe(
+    //     "An error occurred while deactivating the event",
+    //   );
+    //   Event.prototype.save.mockRestore();
+    // });
   });
 
   describe("DELETE /api/events/:id", () => {
@@ -296,13 +332,18 @@ describe("Integration Tests - /api/events", () => {
 
     it("should return 200 and successfully delete an event if data is valid", async () => {
       const res = await exec();
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty("message", "Event deleted successfully.");
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Event deleted successfully.");
+      expect(res.body.event.isActive).toBe(false);
+      expect(res.body.event.isDeleted).toBe(true);
     });
 
     it("should return 404 if no event is found with the given id", async () => {
-      const res = await request(server).put(`/api/events/${new Event().id}`);
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
+      const res = await request(server).delete(`/api/events/${new Event().id}`);
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe(
+        "The event with the given ID was not found.",
+      );
     });
   });
 
@@ -339,16 +380,17 @@ describe("Integration Tests - /api/events", () => {
 
     it("should return 200 and successfully delete multiple events if data is valid", async () => {
       const res = await exec([event1._id, event2._id]);
-      expect(res.status).toBe(httpStatus.OK);
-      expect(res.body).toHaveProperty(
-        "message",
-        "Events deleted successfully.",
-      );
+      expect(res.status).toBe(StatusCodes.OK);
+      expect(res.body.message).toBe("Events deleted successfully.");
+      expect(res.body.deletedCount).toBe(2);
     });
 
     it("should return 404 if no event is found with the given id", async () => {
       const res = await exec([new Event().id]);
-      expect(res.status).toBe(httpStatus.NOT_FOUND);
+      expect(res.status).toBe(StatusCodes.NOT_FOUND);
+      expect(res.body.message).toBe(
+        "No events with the provided IDs were found.",
+      );
     });
   });
 });

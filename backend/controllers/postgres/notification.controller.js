@@ -97,7 +97,7 @@ exports.updateNotification = async (req, res) => {
     req.body,
   );
 
-  if (!updatedNotification)
+  if (!updatedNotification.length)
     return res
       .status(status.NOT_FOUND)
       .send("The notification with the given ID was not found.");

@@ -1,6 +1,6 @@
-const httpStatus = require("http-status");
 const config = require("config");
-// const debug = require("../startup/debug");
+const { StatusCodes, getReasonPhrase } = require("http-status-codes");
+
 const { Application } = require("../../models/mongo/application.model");
 
 // Controller to get all the applications
@@ -9,23 +9,30 @@ exports.getAllApplications = async (req, res) => {
     page = config.get("defaultPage"),
     pageSize = config.get("defaultPageSize"),
     sort = config.get("defaultSort"),
+    isActive,
+    name,
   } = req.query;
 
-  const query = {
-    isDeleted: false,
-  };
+  const query = { isDeleted: false };
 
-  if (req.query.isActive) query.isActive = req.query.isActive.toLowerCase();
-  if (req.query.name) query.name = { $regex: req.query.name, $options: "i" };
+  if (isActive) query.isActive = isActive.toLowerCase();
+  if (name) query.name = { $regex: new RegExp(name, "i") };
 
-  // try this in one query
-  const totalCount = await Application.countDocuments(query);
-  const applications = await Application.find(query)
+  const totalCountPromise = Application.countDocuments(query);
+  const applicationsPromise = Application.find(query)
     .sort(sort)
     .skip((page - 1) * pageSize)
     .limit(pageSize);
+
+  const [totalCount, applications] = await Promise.all([
+    totalCountPromise,
+    applicationsPromise,
+  ]);
+
   if (!applications.length)
-    return res.status(httpStatus.NOT_FOUND).send("No applications found.");
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: getReasonPhrase(StatusCodes.NOT_FOUND) });
 
   const response = {
     currentPage: parseInt(page, 10),
@@ -34,45 +41,52 @@ exports.getAllApplications = async (req, res) => {
     applications,
   };
 
-  return res.status(httpStatus.OK).send(response);
+  return res
+    .status(StatusCodes.OK)
+    .json({ message: getReasonPhrase(StatusCodes.OK), data: response });
 };
 
-// Controller to get single application by Id
+// Controller to get a single application by Id
 exports.getApplicationById = async (req, res) => {
   const application = await Application.findOne({
     _id: req.params.id,
     isDeleted: false,
   });
-  if (!application)
-    return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The application with the given ID was not found.");
 
-  return res.status(httpStatus.OK).send(application);
+  if (!application) {
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: getReasonPhrase(StatusCodes.NOT_FOUND) });
+  }
+
+  return res
+    .status(StatusCodes.OK)
+    .json({ message: getReasonPhrase(StatusCodes.OK), data: application });
 };
 
 // Controller to create a new application
 exports.createApplication = async (req, res) => {
   const { name } = req.body;
-
   const existingApplication = await Application.findOne({ name });
 
-  if (existingApplication)
+  if (existingApplication) {
     return res
-      .status(httpStatus.CONFLICT)
-      .send("Application with this name already exists.");
+      .status(StatusCodes.CONFLICT)
+      .json({ message: "Application with this name already exists" });
+  }
 
-  let application = new Application(req.body);
-  application = await application.save();
+  const application = new Application(req.body);
+  const savedApplication = await application.save();
 
-  if (!application || application.length === 0)
+  if (!savedApplication)
     return res
-      .status(httpStatus.INTERNAL_SERVER_ERROR)
-      .send("The application could not be created.");
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: getReasonPhrase(StatusCodes.INTERNAL_SERVER_ERROR) });
 
-  return res
-    .status(httpStatus.CREATED)
-    .send({ message: "Application created successfully.", application });
+  return res.status(StatusCodes.CREATED).json({
+    message: getReasonPhrase(StatusCodes.CREATED),
+    data: savedApplication,
+  });
 };
 
 // Controller to update an existing application
@@ -85,61 +99,69 @@ exports.updateApplication = async (req, res) => {
 
   if (existingApplication)
     return res
-      .status(httpStatus.CONFLICT)
-      .send("Application with this name already exists.");
+      .status(StatusCodes.CONFLICT)
+      .json({ message: getReasonPhrase(StatusCodes.CONFLICT) });
 
   req.body.modifiedDate = Date.now();
-  const application = await Application.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true },
-  );
+  let application = await Application.findById(req.params.id);
+  if (!application)
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: getReasonPhrase(StatusCodes.NOT_FOUND) });
+
+  application = await Application.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+  });
 
   if (!application)
     return res
-      .status(httpStatus.INTERNAL_SERVER_ERROR)
-      .send("The application could not be updated.");
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: getReasonPhrase(StatusCodes.INTERNAL_SERVER_ERROR) });
 
-  return res
-    .status(httpStatus.OK)
-    .send({ message: "Application updated successfully.", application });
+  return res.status(StatusCodes.OK).json({
+    message: getReasonPhrase(StatusCodes.OK),
+    data: application,
+  });
 };
 
 // Controller to deactivate an existing application
 exports.deactivateApplication = async (req, res) => {
-  const application = await Application.findByIdAndUpdate(
-    req.params.id,
-    {
-      isActive: false,
-    },
-    { new: true },
-  );
+  const application = await Application.findById(req.params.id);
   if (!application)
     return res
-      .status(httpStatus.NOT_FOUND)
-      .send("The application with the given ID was not found.");
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: getReasonPhrase(StatusCodes.NOT_FOUND) });
 
-  return res
-    .status(httpStatus.OK)
-    .send({ message: "Application deactivated successfully.", application });
+  application.isActive = false;
+  application.modifiedDate = Date.now();
+
+  const updatedApplication = await application.save();
+
+  if (!updatedApplication)
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: getReasonPhrase(StatusCodes.INTERNAL_SERVER_ERROR) });
+
+  return res.status(StatusCodes.OK).json({
+    message: getReasonPhrase(StatusCodes.OK),
+    data: updatedApplication,
+  });
 };
 
 // Controller to delete an existing application
 exports.deleteApplication = async (req, res) => {
-  const application = await Application.findByIdAndUpdate(
-    req.params.id,
-    {
-      isActive: false,
-      isDeleted: true,
-    },
-    { new: true },
-  );
+  const application = await Application.findById(req.params.id);
   if (!application)
     return res
-      .status(httpStatus.INTERNAL_SERVER_ERROR)
-      .send("The application could not be deleted.");
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: getReasonPhrase(StatusCodes.NOT_FOUND) });
+
+  application.isActive = false;
+  application.isDeleted = true;
+  application.modifiedDate = Date.now();
+  await application.save();
 
   return res
-    .status(httpStatus.OK)
-    .send({ message: "Application deleted successfully.", application });
+    .status(StatusCodes.OK)
+    .json({ message: getReasonPhrase(StatusCodes.OK), data: application });
 };

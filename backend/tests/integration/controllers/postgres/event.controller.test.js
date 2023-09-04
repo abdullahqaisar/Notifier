@@ -19,9 +19,9 @@ describe("Integration Tests - Event Controller", () => {
   });
 
   afterAll(async () => {
+    await server.close();
     await knex.migrate.rollback(true);
     await knex.destroy();
-    server.close();
   });
 
   beforeEach(async () => {

@@ -29,6 +29,13 @@ describe("Integration Tests - Message Controller", () => {
   });
 
   afterEach(async () => {
+    await server.close();
+    await Notification.deleteMany({});
+    await Message.deleteMany({});
+  });
+
+  afterAll(async () => {
+    await server.close();
     await Notification.deleteMany({});
     await Message.deleteMany({});
   });
